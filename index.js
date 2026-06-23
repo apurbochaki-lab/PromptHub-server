@@ -42,6 +42,13 @@ async function run() {
             res.json(result);
         })
 
+        // Get all prompts
+        app.get('/api/prompts', async (req, res) => {
+            const result = await promptsCollection.find().toArray();
+            res.json(result);
+        })
+
+        // Get prompt details
         app.get('/api/prompt-details/:id', async (req, res) => {
             const id = req.params.id;
             const query = {
@@ -53,7 +60,22 @@ async function run() {
         })
 
 
-        // User role related apis
+        // --------User role related apis [USER DASHBOARD]-------------------
+
+        // User dashboard --> My Prompts
+        app.get('/api/my-prompts', async (req, res) => {
+            const creatorId = req.query.creatorId;
+            const query = {};
+
+            if (creatorId) {
+                query.creatorId = creatorId
+            }
+            const result = await promptsCollection.find(query).toArray();
+
+            res.json(result)
+        })
+
+        // User dashboard --> Add Prompt
         app.post('/api/prompts', async (req, res) => {
             const promptData = req.body;
             const result = await promptsCollection.insertOne(promptData);
