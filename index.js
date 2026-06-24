@@ -30,10 +30,13 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const database = client.db("PromptHub-DB");
         const promptsCollection = database.collection("all-prompts");
+
+        // this bookmarkColl will use for bookmarks storing
+        const bookmarksCollection = database.collection("bookmarks");
 
 
         // Featured Section with limit(6)
@@ -48,15 +51,34 @@ async function run() {
             res.json(result);
         })
 
-        // Get prompt details
+        // Get prompt details + bookmarkColl status checking
         app.get('/api/prompt-details/:id', async (req, res) => {
             const id = req.params.id;
+            const userId = req.query.userId;
+
             const query = {
                 _id: new ObjectId(id)
             };
+            const promptResult = await promptsCollection.findOne(query);
+            if (!promptResult) {
+                return res.status(404).json({ message: "Prompt not found" });
+            }
 
-            const result = await promptsCollection.findOne(query);
-            res.json(result);
+            // For bookmark status
+            let isBookmarked = false;
+            const bookmarkQuery = {
+                promptId: id,
+                userId
+            }
+            if (userId) {
+                const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery)
+
+                if (bookmarkExist) {
+                    isBookmarked = true;
+                }
+            }
+
+            res.json({ ...promptResult, isBookmarked });
         })
 
 
@@ -78,13 +100,42 @@ async function run() {
         // User dashboard --> Add Prompt
         app.post('/api/prompts', async (req, res) => {
             const promptData = req.body;
-            const result = await promptsCollection.insertOne(promptData);
+            const newPromptData = {
+                ...promptData,
+                createdAt: new Date()
+            }
+            const result = await promptsCollection.insertOne(newPromptData);
             res.json(result);
         })
 
 
+        // User dashboard --> Bookmarks (toggle)
+        app.post("/api/prompts/bookmark", async (req, res) => {
+            const bookmarkData = req.body;
+
+            const isExist = await bookmarksCollection.findOne(bookmarkData);
+            if (isExist) {
+                const result = await bookmarksCollection.deleteOne(bookmarkData)
+                return res.json({ message: "Bookmark removed", isBookmarked: false })
+            }
+
+            const result = await bookmarksCollection.insertOne(bookmarkData);
+            res.json({ message: "Bookmark added", isBookmarked: true })
+        })
+
+
+
+        app.get("/api/my-bookmark", async (req, res) => {
+            const userId = req.query.userId;
+            const result = await bookmarksCollection.find({ userId }).toArray()
+            // console.log(result)
+
+            res.json(result)
+        })
+
+
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
