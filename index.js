@@ -16,6 +16,7 @@ app.get('/', (req, res) => {
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 const uri = process.env.MONGODB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -26,6 +27,41 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
+
+const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.NEXT_PUBLIC_CLIENT_URL}/api/auth/jwks`)
+)
+
+// Middleware
+const verifyToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+
+    try {
+        const { payload } = await jwtVerify(token, JWKS);
+        req.user = payload;
+        console.log("Verification Payload: ", payload);
+        next()
+    }
+    catch (error) {
+        console.log("Error!", error);
+        return res.status(401).json({ message: "Unauthorized" })
+    }
+}
+
+const verifyUserRole = async (req, res, next) => {
+    const user = req.user;
+    if (user?.role !== "user") {
+        return res.status(403).json({ message: "Access forbidden" })
+    }
+    next()
+}
 
 async function run() {
     try {
@@ -111,8 +147,9 @@ async function run() {
         })
 
         // User dashboard --> Add Prompt
-        app.post('/api/prompts', async (req, res) => {
+        app.post('/api/prompts', verifyToken, verifyUserRole, async (req, res) => {
             const promptData = req.body;
+
             const newPromptData = {
                 ...promptData,
                 createdAt: new Date()
