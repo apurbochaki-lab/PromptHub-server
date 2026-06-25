@@ -34,9 +34,9 @@ async function run() {
 
         const database = client.db("PromptHub-DB");
         const promptsCollection = database.collection("all-prompts");
-
-        // this bookmarkColl will use for bookmarks storing
         const bookmarksCollection = database.collection("bookmarks");
+        const subscriptionsCollection = database.collection("subscriptions");
+        const userCollection = database.collection("user");
 
 
         // Featured Section with limit(6)
@@ -52,35 +52,6 @@ async function run() {
         })
 
         // Get prompt details + bookmarkColl status checking
-        // app.get('/api/prompt-details/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const userId = req.query.userId;
-
-        //     const query = {
-        //         _id: new ObjectId(id)
-        //     };
-        //     const promptResult = await promptsCollection.findOne(query);
-        //     if (!promptResult) {
-        //         return res.status(404).json({ message: "Prompt not found" });
-        //     }
-
-        //     // For bookmark status
-        //     let isBookmarked = false;
-        //     const bookmarkQuery = {
-        //         promptId: id,
-        //         userId
-        //     }
-        //     if (userId) {
-        //         const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery)
-
-        //         if (bookmarkExist) {
-        //             isBookmarked = true;
-        //         }
-        //     }
-
-        //     res.json({ ...promptResult, isBookmarked });
-        // })
-
         app.get('/api/prompt-details/:id', async (req, res) => {
             try {
                 const id = req.params.id;
@@ -182,6 +153,64 @@ async function run() {
 
             const result = await bookmarksCollection.deleteOne(query);
             res.json(result)
+        })
+
+        // Increase copy count
+        app.patch("/api/prompts/copy-count", async (req, res) => {
+            try {
+                const { promptId } = req.body;
+                const filter = {
+                    _id: new ObjectId(promptId)
+                }
+
+                const result = await promptsCollection.updateOne(filter, {
+                    $inc: { copyCount: 1 }
+                })
+                if (result.matchedCount === 0) {
+                    return res.status(404).json({ message: "Prompt not found" })
+                }
+
+                res.json({ success: true, message: "Copy count updated!" });
+            }
+            catch (error) {
+                console.error("Error updating copy count:", error);
+                res.status(500).json({ message: "Internal Server Error", error: error.message });
+            }
+        })
+
+        // Payment to database
+        app.post("/api/payment", async (req, res) => {
+            try {
+                const data = req.body;
+                const paymentData = {
+                    ...data,
+                    createdAt: new Date()
+                }
+                // add to subscription coll
+                const isExist = await subscriptionsCollection.findOne({
+                    session_id: data?.session_id
+                })
+                if (isExist) {
+                    return res.json({ success: false, message: "Data already exist" })
+                }
+                else {
+                    const payment = await subscriptionsCollection.insertOne(paymentData);
+                }
+
+                // Update user plan free to pro
+                const filter = {
+                    _id: new ObjectId(data?.userId)
+                }
+                const updateInfo = {
+                    $set: { plan: "pro" }
+                }
+                const userPlan = await userCollection.updateOne(filter, updateInfo)
+                res.json({ success: true, message: "Payment info added" })
+            }
+            catch (error) {
+                console.error("Error when payment data:", error);
+                res.status(500).json({ message: "Internal Server Error", error: error.message });
+            }
         })
 
 
