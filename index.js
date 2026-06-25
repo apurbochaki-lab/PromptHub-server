@@ -52,34 +52,76 @@ async function run() {
         })
 
         // Get prompt details + bookmarkColl status checking
+        // app.get('/api/prompt-details/:id', async (req, res) => {
+        //     const id = req.params.id;
+        //     const userId = req.query.userId;
+
+        //     const query = {
+        //         _id: new ObjectId(id)
+        //     };
+        //     const promptResult = await promptsCollection.findOne(query);
+        //     if (!promptResult) {
+        //         return res.status(404).json({ message: "Prompt not found" });
+        //     }
+
+        //     // For bookmark status
+        //     let isBookmarked = false;
+        //     const bookmarkQuery = {
+        //         promptId: id,
+        //         userId
+        //     }
+        //     if (userId) {
+        //         const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery)
+
+        //         if (bookmarkExist) {
+        //             isBookmarked = true;
+        //         }
+        //     }
+
+        //     res.json({ ...promptResult, isBookmarked });
+        // })
+
         app.get('/api/prompt-details/:id', async (req, res) => {
-            const id = req.params.id;
-            const userId = req.query.userId;
+            try {
+                const id = req.params.id;
+                const userId = req.query.userId;
 
-            const query = {
-                _id: new ObjectId(id)
-            };
-            const promptResult = await promptsCollection.findOne(query);
-            if (!promptResult) {
-                return res.status(404).json({ message: "Prompt not found" });
-            }
-
-            // For bookmark status
-            let isBookmarked = false;
-            const bookmarkQuery = {
-                promptId: id,
-                userId
-            }
-            if (userId) {
-                const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery)
-
-                if (bookmarkExist) {
-                    isBookmarked = true;
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).json({ message: "Invalid Prompt ID format" });
                 }
-            }
 
-            res.json({ ...promptResult, isBookmarked });
-        })
+                const query = {
+                    _id: new ObjectId(id)
+                };
+
+                const promptResult = await promptsCollection.findOne(query);
+                if (!promptResult) {
+                    return res.status(404).json({ message: "Prompt not found" });
+                }
+
+                let isBookmarked = false;
+                const bookmarkQuery = {
+                    promptId: id,
+                    userId
+                };
+
+                if (userId) {
+                    const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery);
+                    if (bookmarkExist) {
+                        isBookmarked = true;
+                    }
+                }
+
+                res.json({ ...promptResult, isBookmarked });
+
+            } catch (error) {
+                console.error("Error fetching prompt details:", error);
+                res.status(500).json({
+                    message: "Internal Server Error",
+                    error: error.message
+                });
+            }
+        });
 
 
         // --------User role related apis [USER DASHBOARD]-------------------
@@ -123,13 +165,22 @@ async function run() {
             res.json({ message: "Bookmark added", isBookmarked: true })
         })
 
-
-
+        // Get bookmarks data from user dashbaord
         app.get("/api/my-bookmark", async (req, res) => {
             const userId = req.query.userId;
             const result = await bookmarksCollection.find({ userId }).toArray()
             // console.log(result)
+            res.json(result)
+        })
 
+        // Delete bookmark from user dashboard
+        app.delete("/api/delete/my-bookmark", async (req, res) => {
+            const { bookmarkId } = req.body;
+            const query = {
+                _id: new ObjectId(bookmarkId)
+            }
+
+            const result = await bookmarksCollection.deleteOne(query);
             res.json(result)
         })
 
