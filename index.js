@@ -32,36 +32,6 @@ const JWKS = createRemoteJWKSet(
     new URL(`${process.env.NEXT_PUBLIC_CLIENT_URL}/api/auth/jwks`)
 )
 
-// Middleware
-const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).json({ message: "Unauthorized" })
-    }
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({ message: "Unauthorized" })
-    }
-
-    try {
-        const { payload } = await jwtVerify(token, JWKS);
-        req.user = payload;
-        console.log("Verification Payload: ", payload);
-        next()
-    }
-    catch (error) {
-        console.log("Error!", error);
-        return res.status(401).json({ message: "Unauthorized" })
-    }
-}
-
-const verifyUserRole = async (req, res, next) => {
-    const user = req.user;
-    if (user?.role !== "user") {
-        return res.status(403).json({ message: "Access forbidden" })
-    }
-    next()
-}
 
 async function run() {
     try {
@@ -75,6 +45,51 @@ async function run() {
         const userCollection = database.collection("user");
 
 
+
+        // Token Verification Middleware
+        const tokenChecker = async (req, res, next) => {
+            const authHeader = req.headers;
+            const token = authHeader.authorization;
+
+            console.log("✅ authHeader : ", authHeader);
+            console.log("💖 Token : ", token);
+
+            next()
+        }
+
+
+        const verifyToken = async (req, res, next) => {
+            const authHeader = req.headers.authorization;
+            // console.log("✅ Auth header :", req.headers)
+            if (!authHeader) {
+                return res.status(401).json({ message: "Unauthorized" })
+            }
+            const token = authHeader.split(" ")[1];
+            if (!token) {
+                return res.status(401).json({ message: "Unauthorized" })
+            }
+
+            try {
+                const { payload } = await jwtVerify(token, JWKS);
+                req.user = payload;
+                console.log("Verification Payload: ", payload);
+                next()
+            }
+            catch (error) {
+                console.log("Error!", error);
+                return res.status(401).json({ message: "Unauthorized" })
+            }
+        }
+
+        const verifyUserRole = async (req, res, next) => {
+            const user = req.user;
+            if (user?.role !== "user") {
+                return res.status(403).json({ message: "Access forbidden" })
+            }
+            next()
+        }
+
+
         // Featured Section with limit(6)
         app.get('/api/prompts/featured', async (req, res) => {
             const result = await promptsCollection.find().skip(2).limit(6).toArray();
@@ -82,9 +97,9 @@ async function run() {
         })
 
         // Get all prompts
-        app.get('/api/prompts', async (req, res) => {
+        app.get('/api/prompts', verifyToken, async (req, res) => {
             const result = await promptsCollection.find().toArray();
-            res.json(result);
+            res.json(result || []);
         })
 
         // Get prompt details + bookmarkColl status checking
@@ -134,9 +149,9 @@ async function run() {
         // --------User role related apis [USER DASHBOARD]-------------------
 
         // User dashboard --> My Prompts
-        app.get('/api/my-prompts', async (req, res) => {
+        app.get('/api/my-prompts', verifyToken, async (req, res) => {
             const creatorId = req.query.creatorId;
-            const query = {};
+            const query = {}; 
 
             if (creatorId) {
                 query.creatorId = creatorId
