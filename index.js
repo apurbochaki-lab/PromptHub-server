@@ -43,6 +43,8 @@ async function run() {
         const bookmarksCollection = database.collection("bookmarks");
         const subscriptionsCollection = database.collection("subscriptions");
         const userCollection = database.collection("user");
+        const reportCollection = database.collection("reports");
+        const reviewCollection = database.collection("reviews");
 
 
 
@@ -99,10 +101,9 @@ async function run() {
         // Get all prompts
         app.get('/api/prompts', verifyToken, async (req, res) => {
             const status = req.query.status;
-            // console.log("Status", status)
 
             // TODO : {status: status }
-            const result = await promptsCollection.find().toArray();
+            const result = await promptsCollection.find({ status }).toArray();
             res.json(result || []);
         })
 
@@ -125,12 +126,12 @@ async function run() {
                     return res.status(404).json({ message: "Prompt not found" });
                 }
 
+                // Bookmark status checking
                 let isBookmarked = false;
                 const bookmarkQuery = {
                     promptId: id,
                     userId
                 };
-
                 if (userId) {
                     const bookmarkExist = await bookmarksCollection.findOne(bookmarkQuery);
                     if (bookmarkExist) {
@@ -138,7 +139,21 @@ async function run() {
                     }
                 }
 
-                res.json({ ...promptResult, isBookmarked });
+                // Review Status checking
+                let isReviewed = false;
+                const reviewQuery = {
+                    promptId: id,
+                    userId
+                }
+                if (userId) {
+                    const reviewExist = await reviewCollection.findOne(reviewQuery)
+                    if (reviewExist) {
+                        isReviewed = true;
+                    }
+                }
+
+                // Final response
+                res.json({ ...promptResult, isBookmarked, isReviewed });
 
             } catch (error) {
                 console.error("Error fetching prompt details:", error);
@@ -148,6 +163,68 @@ async function run() {
                 });
             }
         });
+
+        // Prompt details page --> Report Prompt
+        app.post("/api/report-prompt", async (req, res) => {
+            const reportData = req.body;
+            const result = await reportCollection.insertOne(reportData);
+            res.json(result);
+        })
+
+        // Prompt details page --> Submit Review Form
+        app.post("/api/prompt-review", async (req, res) => {
+            const data = req.body;
+            const reviewData = {
+                ...data,
+                createdAt: new Date()
+            }
+            const userId = reviewData?.userId;
+            const promptId = reviewData?.promptId;
+
+            // User can submit one review per prompt
+            const isExist = await reviewCollection.findOne({ userId, promptId });
+            if (isExist) {
+                return res.json({ isExist: true, message: "You already reviewed!" })
+            } else {
+                const result = await reviewCollection.insertOne(reviewData);
+            }
+
+            // Now need to update the rating count of the prompt
+            const filter = { _id: new ObjectId(promptId) }
+            const prompt = await promptsCollection.findOne(filter)
+
+            // Rating avg value calculation:
+            const rating = reviewData?.rating;  // user review rating
+            const ratingSum = prompt?.ratingSum;
+            const reviewCount = prompt?.reviewCount;
+
+            // Calculation
+            const newRatingSum = ratingSum + rating;
+            const newReviewCount = reviewCount + 1;
+            const avgRating = newRatingSum / newReviewCount;
+            // Rounded number
+            const ratingNumber = Number(avgRating.toFixed(1));
+            console.log("Updated Rating : ", ratingNumber);
+
+            // Now need to update the rating value of the prompt
+            const updatedRating = await promptsCollection.updateOne(filter, {
+                $set: {
+                    rating: ratingNumber,
+                    ratingSum: newRatingSum,
+                    reviewCount: newReviewCount
+                }
+            })
+
+            res.json({ isExist: false, message: "Review submitted." })
+        })
+
+        // Prompt details page --> Recent REviews
+        app.get("/api/prompt-review", async (req, res) => {
+            const promptId = req.query.promptId;
+
+            const result = await reviewCollection.find({ promptId }).toArray();
+            res.json(result)
+        })
 
 
         // --------User role related apis [USER DASHBOARD]-------------------
