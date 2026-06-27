@@ -98,6 +98,10 @@ async function run() {
 
         // Get all prompts
         app.get('/api/prompts', verifyToken, async (req, res) => {
+            const status = req.query.status;
+            // console.log("Status", status)
+
+            // TODO : {status: status }
             const result = await promptsCollection.find().toArray();
             res.json(result || []);
         })
@@ -151,7 +155,7 @@ async function run() {
         // User dashboard --> My Prompts
         app.get('/api/my-prompts', verifyToken, async (req, res) => {
             const creatorId = req.query.creatorId;
-            const query = {}; 
+            const query = {};
 
             if (creatorId) {
                 query.creatorId = creatorId
@@ -162,7 +166,7 @@ async function run() {
         })
 
         // User dashboard --> Add Prompt
-        app.post('/api/prompts', verifyToken, verifyUserRole, async (req, res) => {
+        app.post('/api/prompts', verifyToken, async (req, res) => {
             const promptData = req.body;
 
             const newPromptData = {
@@ -173,18 +177,33 @@ async function run() {
             res.json(result);
         })
 
-
         // User dashboard --> Bookmarks (toggle)
         app.post("/api/prompts/bookmark", async (req, res) => {
             const bookmarkData = req.body;
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
 
             const isExist = await bookmarksCollection.findOne(bookmarkData);
+            // Remove from bookmark & decrement the bookmark count value
             if (isExist) {
                 const result = await bookmarksCollection.deleteOne(bookmarkData)
+                const bookmarkCount = await promptsCollection.updateOne(filter,
+                    {
+                        $inc: { bookmarkCount: -1 }
+                    }
+                )
                 return res.json({ message: "Bookmark removed", isBookmarked: false })
             }
 
+            // Add to bookmark & increment the bookmark count value
             const result = await bookmarksCollection.insertOne(bookmarkData);
+            const bookmarkCount = await promptsCollection.updateOne(filter,
+                {
+                    $inc: { bookmarkCount: +1 }
+                }
+            )
             res.json({ message: "Bookmark added", isBookmarked: true })
         })
 
@@ -265,6 +284,39 @@ async function run() {
             }
         })
 
+
+        // --------Creator role related apis [USER DASHBOARD]-------------------
+
+        // Creator Home Analytics
+        app.get("/api/my-prompts-stats", async (req, res) => {
+            const creatorId = req.query.creatorId;
+
+            const result = await promptsCollection.aggregate([
+                {
+                    $match: {
+                        creatorId: creatorId
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalCopyCount: {
+                            $sum: "$copyCount"
+                        },
+                        totalBookmarkCount: {
+                            $sum: "$bookmarkCount"
+                        }
+                    }
+                }
+            ]).toArray();
+
+            console.log("Total Counts:", result);
+
+            res.json(result[0] || {
+                totalCopyCount: 0,
+                totalBookmarkCount: 0
+            })
+        })
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
