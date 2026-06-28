@@ -239,7 +239,7 @@ async function run() {
             res.json(result)
         })
 
-        // Get Top 3 Creators
+        // Homepage --> Get Top 3 Creators
         app.get("/api/top-creators", async (req, res) => {
             try {
                 const topCreators = await promptsCollection.aggregate([
@@ -313,6 +313,54 @@ async function run() {
             const result = await promptsCollection.find(query).toArray();
 
             res.json(result)
+        })
+
+        // User My Prompts --> Prompt Update
+        app.patch("/api/data-update/user", verifyToken, verifyUserRole, async (req, res) => {
+            try {
+                const promptId = req.query.promptId;
+                const updatedData = req.body;
+
+                const filter = { _id: new ObjectId(promptId) };
+                const updateDoc = {
+                    $set: updatedData,
+                };
+
+                // Find & Update data
+                const result = await promptsCollection.updateOne(filter, updateDoc);
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Prompt not found!"
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: "Prompt updated successfully!",
+                    result
+                });
+
+            } catch (error) {
+                console.error("Error updating prompt:", error);
+                res.status(500).send({
+                    success: false,
+                    message: "Internal server error",
+                    error: error.message
+                });
+            }
+        });
+
+        // Creator My Prompts --> Prompt Delete
+        app.delete("/api/data-delete/user", verifyToken, verifyUserRole, async (req, res) => {
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+
+            const result = await promptsCollection.deleteOne(filter);
+            res.json({ success: true, message: "Data deleted", result })
         })
 
         // User dashboard --> Add Prompt
@@ -491,6 +539,56 @@ async function run() {
             const result = await promptsCollection.insertOne(newPromptData);
             res.json(result);
         })
+
+        // Creator My Prompts --> Prompt Update
+        app.patch("/api/data-update/creator", verifyToken, verifyCreatorRole, async (req, res) => {
+            try {
+                const promptId = req.query.promptId;
+                const updatedData = req.body;
+
+                const filter = { _id: new ObjectId(promptId) };
+                const updateDoc = {
+                    $set: updatedData,
+                };
+
+                // Find & Update data
+                const result = await promptsCollection.updateOne(filter, updateDoc);
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: "Prompt not found!"
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: "Prompt updated successfully!",
+                    result
+                });
+
+            } catch (error) {
+                console.error("Error updating prompt:", error);
+                res.status(500).send({
+                    success: false,
+                    message: "Internal server error",
+                    error: error.message
+                });
+            }
+        });
+
+        // Creator My Prompts --> Prompt Delete
+        app.delete("/api/data-delete/creator", verifyToken, verifyCreatorRole, async (req, res) => {
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+
+            const result = await promptsCollection.deleteOne(filter);
+            res.json({ success: true, message: "Data deleted", result })
+        })
+
+
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
