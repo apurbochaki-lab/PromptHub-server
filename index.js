@@ -107,7 +107,7 @@ async function run() {
             res.json(result || []);
         })
 
-        // Get prompt details + bookmarkColl status checking
+        // Get prompt details + bookmarkColl & reviewsColl status checking
         app.get('/api/prompt-details/:id', async (req, res) => {
             try {
                 const id = req.params.id;
@@ -284,7 +284,7 @@ async function run() {
             res.json({ message: "Bookmark added", isBookmarked: true })
         })
 
-        // Get bookmarks data from user dashbaord
+        // Get bookmarks data from user dashboard
         app.get("/api/my-bookmark", async (req, res) => {
             const userId = req.query.userId;
             const result = await bookmarksCollection.find({ userId }).toArray()
@@ -359,6 +359,18 @@ async function run() {
                 console.error("Error when payment data:", error);
                 res.status(500).json({ message: "Internal Server Error", error: error.message });
             }
+        })
+
+        // User dashboard --> My Reviews
+        app.get("/api/dashboard/my-reviews", async (req, res) => {
+            const userId = req.query.userId;
+            const query = {};
+            if (userId) {
+                query.userId = userId
+            }
+
+            const result = await reviewCollection.find(query).toArray();
+            res.json(result);
         })
 
 
