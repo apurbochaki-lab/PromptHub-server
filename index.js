@@ -91,6 +91,14 @@ async function run() {
             next()
         }
 
+        const verifyCreatorRole = async (req, res, next) => {
+            const user = req.user;
+            if (user?.role !== "creator") {
+                return res.status(403).json({ message: "Access forbidden! You are not CREATOR" })
+            }
+            next()
+        }
+
 
         // Featured Section with limit(6)
         app.get('/api/prompts/featured', async (req, res) => {
@@ -226,6 +234,71 @@ async function run() {
             res.json(result)
         })
 
+        app.get("/api/prompt-review-public", async (req, res) => {
+            const result = await reviewCollection.find().limit(3).toArray();
+            res.json(result)
+        })
+
+        // Get Top 3 Creators
+        app.get("/api/top-creators", async (req, res) => {
+            try {
+                const topCreators = await promptsCollection.aggregate([
+                    {
+                        $match: {
+                            status: "approved"
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: "$creatorId",
+
+                            creatorName: {
+                                $first: "$creatorName"
+                            },
+
+                            creatorEmail: {
+                                $first: "$creatorEmail"
+                            },
+
+                            totalPromptCount: {
+                                $sum: 1
+                            },
+
+                            totalCopyCount: {
+                                $sum: "$copyCount"
+                            }
+                        }
+                    },
+                    {
+                        $sort: {
+                            totalCopyCount: -1
+                        }
+                    },
+                    {
+                        $limit: 3
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            creatorId: "$_id",
+                            creatorName: 1,
+                            creatorEmail: 1,
+                            totalPromptCount: 1,
+                            totalCopyCount: 1
+                        }
+                    }
+                ]).toArray();
+
+                res.send(topCreators);
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to fetch top creators."
+                });
+            }
+        });
+
 
         // --------User role related apis [USER DASHBOARD]-------------------
 
@@ -243,7 +316,7 @@ async function run() {
         })
 
         // User dashboard --> Add Prompt
-        app.post('/api/prompts', verifyToken, async (req, res) => {
+        app.post('/api/prompts', verifyToken, verifyUserRole, async (req, res) => {
             const promptData = req.body;
 
             const newPromptData = {
@@ -405,6 +478,18 @@ async function run() {
                 totalCopyCount: 0,
                 totalBookmarkCount: 0
             })
+        })
+
+        // Creator add prompt
+        app.post('/api/add-prompt-creator', verifyToken, verifyCreatorRole, async (req, res) => {
+            const promptData = req.body;
+
+            const newPromptData = {
+                ...promptData,
+                createdAt: new Date()
+            }
+            const result = await promptsCollection.insertOne(newPromptData);
+            res.json(result);
         })
 
         // Send a ping to confirm a successful connection
