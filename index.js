@@ -110,7 +110,7 @@ async function run() {
 
         // Featured Section with limit(6)
         app.get('/api/prompts/featured', async (req, res) => {
-            const result = await promptsCollection.find().skip(2).limit(6).toArray();
+            const result = await promptsCollection.find({ isFeatured: true }).skip(2).limit(6).toArray();
             res.json(result);
         })
 
@@ -609,6 +609,63 @@ async function run() {
             const userResult = await userCollection.deleteOne(filter)
             res.json({ message: "User deleted", userResult })
         })
+
+        // Get all prompts data
+        app.get("/api/admin/prompts", tokenChecker, async (req, res) => {
+            const result = await promptsCollection.find().toArray();
+            res.json(result);
+        })
+
+        // User status update | TODO : Rejected message
+        app.patch("/api/admin/update-status", verifyToken, verifyAdminRole, async (req, res) => {
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+            const UpdatedStatus = req.query.status;
+
+            const updateResult = await promptsCollection.updateOne(filter, {
+                $set: {
+                    status: UpdatedStatus
+                }
+            })
+
+            res.json({ message: "Prompt status updated", updateResult })
+        })
+
+        // Delete prompt
+        app.delete("/api/admin/delete-prompt", tokenChecker, async (req, res) => {
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+
+            const deletePrompt = await promptsCollection.deleteOne(filter);
+            res.json({ deletePrompt, message: "Prompt deleted" })
+        })
+
+        // Update featured
+        app.patch("/api/admin/update-featured", async (req, res) => {
+            const promptId = req.query.promptId;
+            const toggle = req.query.toggle === "true"; // Boolean
+
+            const filter = {
+                _id: new ObjectId(promptId)
+            };
+
+            const featuredUpdate = await promptsCollection.updateOne(filter, {
+                $set: {
+                    isFeatured: toggle
+                }
+            });
+
+            res.json({
+                featuredUpdate,
+                message: "Featured toggled"
+            });
+        });
+
+
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
