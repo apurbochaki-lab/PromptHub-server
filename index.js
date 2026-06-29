@@ -615,8 +615,8 @@ async function run() {
             res.json({ message: "User deleted", userResult })
         })
 
-        // Get all prompts data
-        app.get("/api/admin/prompts", tokenChecker, async (req, res) => {
+        // Get all prompts data 
+        app.get("/api/admin/prompts", verifyToken, verifyAdminRole, async (req, res) => {
             const result = await promptsCollection.find().toArray();
             res.json(result);
         })
@@ -771,6 +771,7 @@ async function run() {
             }
         })
 
+        // aiTools count
         app.get("/api/admin/aiTools-count", verifyToken, verifyAdminRole, async (req, res) => {
             try {
                 // Gemini, ChatGPT, Claude prompt count
@@ -802,7 +803,10 @@ async function run() {
             }
         })
 
-
+        app.get("/api/admin/payment-details", verifyToken, verifyAdminRole, async (req, res) => {
+            const result = await subscriptionsCollection.find().toArray();
+            res.json(result);
+        })
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
