@@ -714,6 +714,94 @@ async function run() {
             res.json(result)
         })
 
+        // Get analytics
+        app.get("/api/admin/analytics", verifyToken, verifyAdminRole, async (req, res) => {
+            try {
+                // Total users count dfdfdf
+                const totalUsers = await userCollection.find().toArray();
+                const totalUsersCount = totalUsers.length;
+
+                // Total prompt count
+                const totalPrompts = await promptsCollection.find().toArray();
+                const totalPromptsCount = totalPrompts.length;
+
+                // Total reviews count
+                const totalReviews = await reviewCollection.find().toArray();
+                const totalReviewsCount = totalReviews.length;
+
+                // Total copies
+                const copyCount = await promptsCollection.aggregate([
+                    {
+                        $group: {
+                            _id: null,
+                            totalCopyCount: {
+                                $sum: "$copyCount",
+                            },
+                        },
+                    },
+                ]).toArray();
+                const totalCopyCount = copyCount[0]?.totalCopyCount || 0;
+
+                // Total Revenue
+                const revenue = await subscriptionsCollection.aggregate([
+                    {
+                        $group: {
+                            _id: null,
+                            totalRevenue: {
+                                $sum: "$amount"
+                            }
+                        }
+                    }
+                ]).toArray();
+                const totalRevenue = revenue[0]?.totalRevenue || 0;
+
+                res.json({
+                    success: true,
+                    data: {
+                        totalUsersCount,
+                        totalPromptsCount,
+                        totalReviewsCount,
+                        totalCopyCount,
+                        totalRevenue
+                    }
+                })
+
+            } catch (error) {
+                res.status(500).send({ message: "Failed to get total data count" });
+            }
+        })
+
+        app.get("/api/admin/aiTools-count", verifyToken, verifyAdminRole, async (req, res) => {
+            try {
+                // Gemini, ChatGPT, Claude prompt count
+                const aiToolCount = await promptsCollection.aggregate([
+                    {
+                        $match: {
+                            aiTool: {
+                                $in: ["ChatGPT", "Gemini", "Claude"]
+                            }
+                        }
+                    },
+                    {
+                        $group: {
+                            _id: "$aiTool",
+                            totalPrompts: { $sum: 1 }
+                        }
+                    },
+                    {
+                        $sort: {
+                            totalPrompts: -1
+                        }
+                    }
+                ]).toArray()
+
+                res.json(aiToolCount)
+
+            } catch (error) {
+                res.status(500).send({ message: "Failed to get total aiTools count" });
+            }
+        })
+
 
 
         // Send a ping to confirm a successful connection
