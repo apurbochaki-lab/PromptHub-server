@@ -99,6 +99,14 @@ async function run() {
             next()
         }
 
+        const verifyAdminRole = async (req, res, next) => {
+            const user = req.user;
+            if (user?.role !== "admin") {
+                return res.status(403).json({ message: "Access forbidden! You are not CREATOR" })
+            }
+            next()
+        }
+
 
         // Featured Section with limit(6)
         app.get('/api/prompts/featured', async (req, res) => {
@@ -589,6 +597,18 @@ async function run() {
         })
 
 
+        // --------Admin role related apis [ADMIN DASHBOARD]-------------------
+
+        // All Users ---> Delete user
+        app.delete("/api/admin/delete-user", verifyToken, verifyAdminRole, async (req, res) => {
+            const userId = req.query.userId;
+            const filter = {
+                _id: new ObjectId(userId)
+            }
+
+            const userResult = await userCollection.deleteOne(filter)
+            res.json({ message: "User deleted", userResult })
+        })
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
