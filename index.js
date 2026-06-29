@@ -182,7 +182,12 @@ async function run() {
 
         // Prompt details page --> Report Prompt
         app.post("/api/report-prompt", async (req, res) => {
-            const reportData = req.body;
+            const data = req.body;
+            const reportData = {
+                ...data,
+                createdAt: new Date()
+            }
+
             const result = await reportCollection.insertOne(reportData);
             res.json(result);
         })
@@ -645,7 +650,7 @@ async function run() {
         })
 
         // Update featured
-        app.patch("/api/admin/update-featured", async (req, res) => {
+        app.patch("/api/admin/update-featured", verifyToken, verifyAdminRole, async (req, res) => {
             const promptId = req.query.promptId;
             const toggle = req.query.toggle === "true"; // Boolean
 
@@ -664,6 +669,50 @@ async function run() {
                 message: "Featured toggled"
             });
         });
+
+        // Reported prompts
+        app.get("/api/admin/prompts-reports", async (req, res) => {
+            const result = await reportCollection.find().toArray();
+            res.json(result);
+        })
+
+        // Delete report (Dismiss)
+        app.delete("/api/admin/dismiss-report", verifyToken, verifyAdminRole, async (req, res) => {
+            const reportDocId = req.query.reportDocId;
+            const query = {
+                _id: new ObjectId(reportDocId)
+            }
+
+            const result = await reportCollection.deleteOne(query);
+            res.json(result)
+
+        })
+
+        // Warn creator 
+        app.patch("/api/admin/warn-creator", verifyToken, verifyAdminRole, async (req, res) => {
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+
+            const result = await promptsCollection.updateOne(filter, {
+                $set: {
+                    isWarned: true
+                }
+            })
+            res.json(result)
+        })
+
+        // Remove prompt
+        app.delete("/api/admin/remove-prompt", verifyToken, verifyAdminRole, async (req, res) => {
+            const promptId = req.query.promptId;
+            const query = {
+                _id: new ObjectId(promptId)
+            }
+
+            const result = await promptsCollection.deleteOne(query);
+            res.json(result)
+        })
 
 
 
