@@ -621,25 +621,41 @@ async function run() {
             res.json(result);
         })
 
-        // User status update | TODO : Rejected message
+        // User status update with rejected reason
         app.patch("/api/admin/update-status", verifyToken, verifyAdminRole, async (req, res) => {
-            const promptId = req.query.promptId;
-            const filter = {
-                _id: new ObjectId(promptId)
-            }
-            const UpdatedStatus = req.query.status;
+            try {
+                const promptId = req.query.promptId;
+                const reason = req.query.reason;  // Rejected reason
+                const updateStatus = req.query.status;  // Dynamic value : approved | rejected
 
-            const updateResult = await promptsCollection.updateOne(filter, {
-                $set: {
-                    status: UpdatedStatus
+                const filter = {
+                    _id: new ObjectId(promptId)
                 }
-            })
 
-            res.json({ message: "Prompt status updated", updateResult })
+                // Conditional reason value
+                const updatedData = {
+                    status: updateStatus,
+                    rejectedReason: updateStatus === "rejected" ? reason : null
+                }
+
+                const result = await promptsCollection.updateOne(filter, {
+                    $set: updatedData
+                })
+
+                res.json(result)
+
+            } catch (error) {
+                console.error(error);
+
+                res.status(500).json({
+                    message: "Internal Server Error",
+                    error: error.message
+                });
+            }
         })
 
-        // Delete prompt
-        app.delete("/api/admin/delete-prompt", tokenChecker, async (req, res) => {
+        // Delete prompt --> All Prompts route
+        app.delete("/api/admin/delete-prompt", verifyToken, verifyAdminRole, async (req, res) => {
             const promptId = req.query.promptId;
             const filter = {
                 _id: new ObjectId(promptId)
@@ -652,7 +668,7 @@ async function run() {
         // Update featured
         app.patch("/api/admin/update-featured", verifyToken, verifyAdminRole, async (req, res) => {
             const promptId = req.query.promptId;
-            const toggle = req.query.toggle === "true"; // Boolean
+            const toggle = req.query.toggle === "true"; // string to Boolean conversion
 
             const filter = {
                 _id: new ObjectId(promptId)
@@ -803,6 +819,7 @@ async function run() {
             }
         })
 
+        // Get all payment details
         app.get("/api/admin/payment-details", verifyToken, verifyAdminRole, async (req, res) => {
             const result = await subscriptionsCollection.find().toArray();
             res.json(result);
