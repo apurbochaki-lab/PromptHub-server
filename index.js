@@ -17,6 +17,7 @@ app.get('/', (req, res) => {
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
+const { title } = require("node:process");
 const uri = process.env.MONGODB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -64,11 +65,11 @@ async function run() {
             const authHeader = req.headers.authorization;
             // console.log("✅ Auth header :", req.headers)
             if (!authHeader) {
-                return res.status(401).json({ message: "Unauthorized" })
+                return res.status(401).json({ success: false, message: "Unauthorized! You don't have permission to access this" })
             }
             const token = authHeader.split(" ")[1];
             if (!token) {
-                return res.status(401).json({ message: "Unauthorized" })
+                return res.status(401).json({ success: false, message: "Unauthorized! You don't have permission to access this" })
             }
 
             try {
@@ -115,16 +116,68 @@ async function run() {
         })
 
         // Get all prompts
-        app.get('/api/prompts', verifyToken, async (req, res) => {
+        app.get('/api/prompts', tokenChecker, async (req, res) => {
             const status = req.query.status;
 
             // TODO : {status: status }
-            const result = await promptsCollection.find({ status }).toArray();
-            res.json(result || []);
+            const result = await promptsCollection.find(
+                { status },
+                {
+                    projection: {
+                        title: 1,
+                        aiTool: 1,
+                        difficulty: 1,
+                        category: 1,
+                        image: 1,
+                        copyCount: 1,
+                        rating: 1,
+                        description: 1,
+                        isPrivate: 1
+                    }
+                }
+            ).toArray();
+            res.json(result);
         })
 
+
+
+
+
+
+        // Prompt Details page --> Bookmarks (toggle)
+        app.post("/api/prompts/bookmark", async (req, res) => {
+            const bookmarkData = req.body;
+            const promptId = req.query.promptId;
+            const filter = {
+                _id: new ObjectId(promptId)
+            }
+
+            const isExist = await bookmarksCollection.findOne(bookmarkData);
+            // Remove from bookmark & decrement the bookmark count value
+            if (isExist) {
+                const result = await bookmarksCollection.deleteOne(bookmarkData)
+                const bookmarkCount = await promptsCollection.updateOne(filter,
+                    {
+                        $inc: { bookmarkCount: -1 }
+                    }
+                )
+                return res.json({ message: "Bookmark removed", isBookmarked: false })
+            }
+
+            // Add to bookmark & increment the bookmark count value
+            const result = await bookmarksCollection.insertOne(bookmarkData);
+            const bookmarkCount = await promptsCollection.updateOne(filter,
+                {
+                    $inc: { bookmarkCount: +1 }
+                }
+            )
+            res.json({ message: "Bookmark added", isBookmarked: true })
+        })
+
+
+
         // Get prompt details + bookmarkColl & reviewsColl status checking
-        app.get('/api/prompt-details/:id', async (req, res) => {
+        app.get('/api/prompt-details/:id', verifyToken, async (req, res) => {
             try {
                 const id = req.params.id;
                 const userId = req.query.userId;
@@ -144,6 +197,7 @@ async function run() {
 
                 // Bookmark status checking
                 let isBookmarked = false;
+
                 const bookmarkQuery = {
                     promptId: id,
                     userId
@@ -180,6 +234,16 @@ async function run() {
             }
         });
 
+
+
+
+
+
+
+
+
+
+
         // Prompt details page --> Report Prompt
         app.post("/api/report-prompt", async (req, res) => {
             const data = req.body;
@@ -191,6 +255,10 @@ async function run() {
             const result = await reportCollection.insertOne(reportData);
             res.json(result);
         })
+
+
+
+
 
         // Prompt details page --> Submit Review Form
         app.post("/api/prompt-review", async (req, res) => {
@@ -238,6 +306,12 @@ async function run() {
 
             res.json({ isExist: false, message: "Review submitted." })
         })
+
+
+
+
+
+
 
         // Prompt details page --> Recent REviews
         app.get("/api/prompt-review", async (req, res) => {
@@ -388,35 +462,8 @@ async function run() {
             res.json(result);
         })
 
-        // User dashboard --> Bookmarks (toggle)
-        app.post("/api/prompts/bookmark", async (req, res) => {
-            const bookmarkData = req.body;
-            const promptId = req.query.promptId;
-            const filter = {
-                _id: new ObjectId(promptId)
-            }
 
-            const isExist = await bookmarksCollection.findOne(bookmarkData);
-            // Remove from bookmark & decrement the bookmark count value
-            if (isExist) {
-                const result = await bookmarksCollection.deleteOne(bookmarkData)
-                const bookmarkCount = await promptsCollection.updateOne(filter,
-                    {
-                        $inc: { bookmarkCount: -1 }
-                    }
-                )
-                return res.json({ message: "Bookmark removed", isBookmarked: false })
-            }
 
-            // Add to bookmark & increment the bookmark count value
-            const result = await bookmarksCollection.insertOne(bookmarkData);
-            const bookmarkCount = await promptsCollection.updateOne(filter,
-                {
-                    $inc: { bookmarkCount: +1 }
-                }
-            )
-            res.json({ message: "Bookmark added", isBookmarked: true })
-        })
 
         // Get bookmarks data from user dashboard
         app.get("/api/my-bookmark", async (req, res) => {
