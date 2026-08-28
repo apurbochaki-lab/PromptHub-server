@@ -140,10 +140,6 @@ async function run() {
         })
 
 
-
-
-
-
         // Prompt Details page --> Bookmarks (toggle)
         app.post("/api/prompts/bookmark", async (req, res) => {
             const bookmarkData = req.body;
